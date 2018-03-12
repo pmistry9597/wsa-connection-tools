@@ -1,9 +1,9 @@
-#WSA-Connection-Tools
+# WSA-Connection-Tools
 
 This repository contains a bunch of tools that lets you use a more modern style of C++ with event driven
 networking on Windows. 
 
-##Contents (at the moment):
+## Contents (at the moment):
 
 Tool 		|		Description
 ------------|------------------
