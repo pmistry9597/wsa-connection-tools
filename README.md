@@ -8,3 +8,9 @@ networking on Windows.
 Tool 		|		Description
 ------------|------------------
 Connection Class | Object wrapper around a SOCKET type that is multi-threaded and event-driven.
+
+Currently, I am migrating my current Connection class into a form that can be easily included with headers.
+The Connection class is incomplete right now.
+
+In the future, I may make a less resource intensive version by having all Connections have their receive and send operations
+run from one or two threads encapsulated by a single ConnectionCluster class.
