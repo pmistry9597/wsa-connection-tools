@@ -7,7 +7,7 @@ networking on Windows.
 
 Tool 		|		Description
 ------------|------------------
-Connection Class | Object wrapper around a SOCKET type that is multi-threaded for send and receive and event-driven.
+Connection Class | Object wrapper around a socket that is multi-threaded for send and receive and event-driven.
 
 Currently, I am migrating my current Connection class into a form that can be easily included with headers.
 The Connection class is incomplete right now.
