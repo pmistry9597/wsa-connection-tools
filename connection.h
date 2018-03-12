@@ -11,7 +11,7 @@
 // winsock stuff
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <mwsock.h>
+#include <mswsock.h>
 // end of winsock stuff
 
 class Connection {
@@ -38,7 +38,19 @@ class Connection {
 	void sendWorker();
 	void recvWorker();
 public:
-	// add more stuff here
+	// constructor takes in a connected socket, size of buffer when receiving messages, and event to be run on message receive (no event by default)
+	Connection(SOCKET connection, int bufsize, const std::function<void()>& recvEvent = nullptr);
+	~Connection();
+	void push_msg(std::string msg);
+	std::string pop_msg();
+	void close();
+	void set_recvEvent(const std::function<void()>& recvEvent);
+	bool msg_present();
+	bool waitForMessage();
+	bool is_alive();
+	std::string ip_address();
+	int port();
+	static bool start_winsock();
 };
 
 #endif
