@@ -128,9 +128,9 @@ Connection::Connection(SOCKET connection, int bufsize, const std::function<void(
 	recvThread.detach();
 }
 Connection::~Connection() {
+	close(); // make all threads end
 	WSACloseEvent(recvOverlapped.hEvent); // close events when done
 	WSACloseEvent(sendOverlapped.hEvent);
-	closesocket(connection); // close connection
 }
 void Connection::push_msg(std::string msg) {
 	// protect queue with mutex
