@@ -1,8 +1,12 @@
 #include "connection.h"
 #include <thread>
 
+// debugging iostream
+//#include <iostream>
+
 // NOTES:
 // have to change inet_ntoa to inet_pton and/or inet_ntop
+// make this a copyable object
 
 void Connection::sendWorker() {
 	// if send queue is not empty, loop until all messages sent (set sendRunning true if currrently looping)
@@ -68,10 +72,12 @@ void Connection::recvWorker() {
 			}		
 			// get number of bytes received
 			WSAGetOverlappedResult(connection, &recvOverlapped, &bytesRecv, FALSE, 0);
+			// debug purposes - display bytes received
+			//std::cout << "Bytes received from recvWorker: " << std::to_string(bytesRecv) << "\n";
 			// 0 bytes received means connection ended
 			if (bytesRecv == 0) {
 				quit = true;
-				return;
+				break;
 			}
 			//std::cout << "Bytes received: " + std::to_string(bytesRecv) << "\n";
 			// loop through the chars in buf until cbTransferred reached
@@ -105,11 +111,6 @@ Connection::Connection(SOCKET connection, int bufsize, const std::function<void(
 	recvOverlapped.hEvent = WSACreateEvent();
 	sendOverlapped.hEvent = WSACreateEvent();
 	quit = false;
-	// start sending and receiving thread
-	std::thread sendThread(&Connection::sendWorker, this);
-	sendThread.detach();
-	std::thread recvThread(&Connection::recvWorker, this);
-	recvThread.detach();
 
 	// get port and ip address data of the other side
 	int addrSize = sizeof(SOCKADDR_IN);
@@ -119,6 +120,12 @@ Connection::Connection(SOCKET connection, int bufsize, const std::function<void(
 		int_port = ntohs(addrInfo.sin_port); // convert port data to port number
 		str_ip_address = std::string(inet_ntoa(addrInfo.sin_addr)); // convert ip data to string form
 	}
+
+	// start sending and receiving thread
+	std::thread sendThread(&Connection::sendWorker, this);
+	sendThread.detach();
+	std::thread recvThread(&Connection::recvWorker, this);
+	recvThread.detach();
 }
 Connection::~Connection() {
 	WSACloseEvent(recvOverlapped.hEvent); // close events when done
@@ -150,9 +157,6 @@ void Connection::close() {
 	send_cv.notify_all();
 	closesocket(connection); // close connection
 }
-
-
-
 void Connection::set_recvEvent(const std::function<void()>& recvEvent) {
 	this->recvEvent = recvEvent;
 }

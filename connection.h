@@ -41,16 +41,16 @@ public:
 	// constructor takes in a connected socket, size of buffer when receiving messages, and event to be run on message receive (no event by default)
 	Connection(SOCKET connection, int bufsize, const std::function<void()>& recvEvent = nullptr);
 	~Connection();
-	void push_msg(std::string msg);
-	std::string pop_msg();
-	void close();
-	void set_recvEvent(const std::function<void()>& recvEvent);
-	bool msg_present();
-	bool waitForMessage();
-	bool is_alive();
+	void push_msg(std::string msg); //push message to be sent
+	std::string pop_msg(); // return most recent msg - empty string if no message
+	void close(); // end connections
+	void set_recvEvent(const std::function<void()>& recvEvent); // set event to be run 
+	bool msg_present(); // returns if messages available to be read from the connections
+	bool waitForMessage(); // true if connection is still useful for operations
+	bool is_alive(); // if this object is still useful for operations
 	std::string ip_address();
 	int port();
-	static bool start_winsock();
+	static bool start_winsock(); // starts fundamental winsock resources - must run before any networking can happen
 };
 
 #endif
