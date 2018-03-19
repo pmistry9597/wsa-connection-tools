@@ -104,6 +104,7 @@ void Connection::recvWorker() {
 		recv_cv.notify_all();
 }
 Connection::Connection(SOCKET connection, int bufsize, const std::function<void()>& recvEvent) {
+	null = false;
 	this->connection = connection;
 	this->recvEvent = recvEvent;
 	// set the size to 1 since its only a single character
@@ -127,6 +128,10 @@ Connection::Connection(SOCKET connection, int bufsize, const std::function<void(
 	std::thread recvThread(&Connection::recvWorker, this);
 	recvThread.detach();
 }
+Connection::Connection() {
+	null = true;
+	quit = true;
+}
 Connection::~Connection() {
 	close(); // make all threads end
 	WSACloseEvent(recvOverlapped.hEvent); // close events when done
@@ -145,7 +150,7 @@ std::string Connection::pop_msg() {
 	if (recvQueue.empty()) {
 		return "";
 	}
-	std::string msg = std::string(recvQueue.front());
+	std::string msg = std::string(recvQueue.front()); // copy string so it can be deleted from the queue
 	recvQueue.pop(); // delete the message in recvQueue since no longer needed
 	return msg;
 }

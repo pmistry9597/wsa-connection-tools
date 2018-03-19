@@ -38,8 +38,10 @@ class Connection {
 	void sendWorker();
 	void recvWorker();
 public:
+	bool null;
 	// constructor takes in a connected socket, size of buffer when receiving messages, and event to be run on message receive (no event by default)
 	Connection(SOCKET connection, int bufsize, const std::function<void()>& recvEvent = nullptr);
+	Connection();
 	~Connection();
 	void push_msg(std::string msg); //push message to be sent
 	std::string pop_msg(); // return most recent msg - empty string if no message
@@ -51,6 +53,7 @@ public:
 	std::string ip_address();
 	int port();
 	static bool start_winsock(); // starts fundamental winsock resources - must run before any networking can happen
+
 };
 
 #endif
