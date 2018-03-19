@@ -162,7 +162,7 @@ void Connection::close() {
 	send_cv.notify_all();
 	closesocket(connection); // close connection
 }
-void Connection::set_recvEvent(const std::function<void()>& recvEvent) {
+void Connection::attach_event(const std::function<void()>& recvEvent) {
 	this->recvEvent = recvEvent;
 }
 bool Connection::msg_present() {
@@ -193,4 +193,17 @@ bool Connection::start_winsock() {
 		return false; // return false to indicate failure to start
 	} 
 	return true; // true to mean successful start since successful if this function reached this point
+}
+Connection&& Connection::connect(std::string ip_address, int port, int bufsize) {
+	// will store data regarding target of connection
+	SOCKADDR_IN connInfo;
+	connInfo.sin_family = AF_INET;
+	connInfo.sin_port = htons(port);
+	connInfo.sin_addr.s_addr = inet_addr(ip_address.c_str()); // convert ip address to binary
+	// attempt connection
+	SOCKET connection;
+	if (0 != ::connect(connection, (SOCKADDR*)&connInfo, sizeof(SOCKADDR_IN))) { // if not 0, error occured
+		return Connection(); // return empty Connection since failure
+	}
+	return Connection(connection, bufsize); // return Connection object for connection made
 }

@@ -46,14 +46,14 @@ public:
 	void push_msg(std::string msg); //push message to be sent
 	std::string pop_msg(); // return most recent msg - empty string if no message
 	void close(); // end connections
-	void set_recvEvent(const std::function<void()>& recvEvent); // set event to be run 
+	void attach_event(const std::function<void()>& recvEvent); // set event to be run 
 	bool msg_present(); // returns if messages available to be read from the connections
 	bool waitForMessage(); // true if connection is still useful for operations
 	bool is_alive(); // if this object is still useful for operations
 	std::string ip_address();
 	int port();
 	static bool start_winsock(); // starts fundamental winsock resources - must run before any networking can happen
-
+	static Connection&& connect(std::string ip_address, int port,int bufsize); // blocking connect request - will not return until a result is gotten, either failure or successful connection
 };
 
 #endif
