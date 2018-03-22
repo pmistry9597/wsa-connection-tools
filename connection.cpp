@@ -11,6 +11,7 @@
 void Connection::sendWorker() {
 	// if send queue is not empty, loop until all messages sent (set sendRunning true if currrently looping)
 		// if empty, wait on condition_variable to send messages (set sendRunning false if going to wait)
+		//std::cout << "Send thread started.\n";
 		DWORD flags = 0;// flags for wsasend
 		while (!quit) {
 			// lock sendMutex for protection on sendQueue and for send_cv
@@ -20,20 +21,26 @@ void Connection::sendWorker() {
 				WSABUF sendBuf;
 				//const char* sendMsg = top.c_str();
 				// copy contents of the c_str from top into a new char array
-				char c_msg[top.size()]; // c style string will be stored here for sending
+				char c_msg[top.size()+1]; // c style string will be stored here for sending (with extra character for null)
+				c_msg[top.size()] = '\0'; // set end to null
 				for (int i = 0; i < top.size(); i++) {
 					c_msg[i] = top[i];
 				}
-				sendBuf.len = top.size();
+				sendBuf.len = top.size() + 1;
 				sendBuf.buf = c_msg;
+				//std::cout << "Initiating send.\n";
 				int result = WSASend(connection, &sendBuf, 1, NULL, flags, &sendOverlapped, 0); // last argument should be a completion routine, but so far none is needed
 				// assess whether the result is an actual error
 				if (result != 0) { // 0 means sending already happened
 					// wait for sending to complete if waiting for completion
 					if (WSAGetLastError() == WSA_IO_PENDING) {
+						//std::cout << "Entering wait from send.\n";
 						WSAWaitForMultipleEvents(1, &sendOverlapped.hEvent, FALSE, WSA_INFINITE, TRUE);
+						WSAResetEvent(sendOverlapped.hEvent);
+						//std::cout << "After wait from send.\n";
 					} else {
 						// quit if error occurred (connection no longer functioning)
+						//std::cout << "Failure to send msg from send! ERror: " << std::to_string(WSAGetLastError()) << "\n";
 						quit = true;
 						return;
 					}
@@ -57,12 +64,15 @@ void Connection::recvWorker() {
 			DWORD bytesRecv = 0;
 			// run wsarecv to wait for client to send message - then run recv loop in another thread until client disconnects (bytes zero) or null terminator reached
 			DWORD flags = 0;// flags for wsarecv operation
+			//std::cout << "Initiating recv\n";
 			int result = WSARecv(connection, &recvBuf, 1, NULL, &flags, &recvOverlapped, 0); // recvRoutine is not declared yet
 			// wait for event to be triggered (by external threads/events)
 			if (result != 0) {
 				// wait if receiving still happening
 				if (WSAGetLastError() == WSA_IO_PENDING) {
+					//std::cout << "Before wait from recv.\n";
 					WSAWaitForMultipleEvents(1, &recvOverlapped.hEvent, FALSE, WSA_INFINITE, TRUE);
+					//std::cout << "After wait from recv.\n";
 					WSAResetEvent(recvOverlapped.hEvent); // reset event
 				} else {
 					// quit since this means connection failure
@@ -90,6 +100,7 @@ void Connection::recvWorker() {
 						std::lock_guard<std::mutex> recvLock(recvMutex); // multi threaded queue so must lock before using recvQueue
 						recvQueue.push(strBuffer);
 						strBuffer = ""; // clear buffer for next string
+						//std::cout << "Pushed a message!" << "\n";
 					}
 					if (recvEvent) { // call function meant to be run on message recv if function is present
 						recvEvent();
@@ -98,7 +109,17 @@ void Connection::recvWorker() {
 					continue;
 				}
 				strBuffer += current;
-			}	
+			}
+			if (strBuffer != "") { // send the last msg if there is one remaining
+				std::lock_guard<std::mutex> recvLock(recvMutex); // multi threaded queue so must lock before using recvQueue
+				recvQueue.push(strBuffer);
+				strBuffer = ""; // clear buffer for next string
+				//std::cout << "Pushed a message from the end!" << "\n";
+				if (recvEvent) { // call function meant to be run on message recv if function is present
+					recvEvent();
+				}
+				recv_cv.notify_all();
+			}
 		}
 		// notify recv_cv in case waitForMessage is happening
 		recv_cv.notify_all();
@@ -162,7 +183,7 @@ void Connection::close() {
 	send_cv.notify_all();
 	closesocket(connection); // close connection
 }
-void Connection::attach_event(const std::function<void()>& recvEvent) {
+void Connection::attach_recvEvent(const std::function<void()>& recvEvent) {
 	this->recvEvent = recvEvent;
 }
 bool Connection::msg_present() {
@@ -194,16 +215,32 @@ bool Connection::start_winsock() {
 	} 
 	return true; // true to mean successful start since successful if this function reached this point
 }
-Connection&& Connection::connect(std::string ip_address, int port, int bufsize) {
+bool Connection::connect(std::string ip_address, int port, int bufsize) {
+	if (!null) {
+		return false; // failed connection since this object is not empty
+	}
 	// will store data regarding target of connection
 	SOCKADDR_IN connInfo;
 	connInfo.sin_family = AF_INET;
 	connInfo.sin_port = htons(port);
 	connInfo.sin_addr.s_addr = inet_addr(ip_address.c_str()); // convert ip address to binary
-	// attempt connection
-	SOCKET connection;
-	if (0 != ::connect(connection, (SOCKADDR*)&connInfo, sizeof(SOCKADDR_IN))) { // if not 0, error occured
-		return Connection(); // return empty Connection since failure
+	SOCKET connection = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
+	// attempt to connect, non zero result means failure
+	if (0 != ::connect(connection, (SOCKADDR*)&connInfo, sizeof(SOCKADDR_IN))) {
+		return false;	
 	}
-	return Connection(connection, bufsize); // return Connection object for connection made
+	this->connection = connection; // store socket since successful
+	// must store ip address, port, buffer size, create events, create send/recv threads
+	str_ip_address = ip_address; int_port = port;
+	recvBuf.len = bufsize;
+	recvOverlapped.hEvent = WSACreateEvent();
+	sendOverlapped.hEvent = WSACreateEvent();
+	quit = false;
+	null = false;
+	// start send and recv threads
+	std::thread sendThread(&Connection::sendWorker, this);
+	sendThread.detach();
+	std::thread recvThread(&Connection::recvWorker, this);
+	recvThread.detach();
+	return true; // return true since if it reached this point its successful
 }
