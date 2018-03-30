@@ -2,7 +2,7 @@
 #include <thread>
 
 // debugging iostream
-#include <iostream>
+//#include <iostream>
 
 // NOTES:
 // have to change inet_ntoa to inet_pton and/or inet_ntop
@@ -86,7 +86,7 @@ void Connection::recvWorker() {
 			// check if any more bytes are remaining in buffer - will be used later if last message seems to be clipped
 			result = ioctlsocket(connection, FIONREAD, &excess);
 			// debug purpose for ioctlsocket
-			std::cout << "Result of ioctlsocket to determine excess bytes: " << std::to_string(result) << "\n";
+			//std::cout << "Result of ioctlsocket to determine excess bytes: " << std::to_string(result) << "\n";
 			// get number of bytes received, but no need if already overflowing
 			if (excess > 0) { // if overflowing, recv bytes is the length of buffer
 				bytesRecv = recvBuf.len;
