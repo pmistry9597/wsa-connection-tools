@@ -8,7 +8,6 @@ networking on Windows.
 Tool 		|		Description
 ------------|------------------
 Connection Class | Object wrapper around a connected socket that is multi-threaded for send and receive and event-driven.
----------------|---------------
 Acceptor Class | Objects of this class can receive connections and then places on a queue to retrieve later (as sockets). It's event driven and multi-threaded, so an event can be run on connection accept.
 ------------------------------
 
