@@ -2,7 +2,7 @@
 #include <thread>
 
 // debugging iostream
-//#include <iostream>
+#include <iostream>
 
 // NOTES:
 // have to change inet_ntoa to inet_pton and/or inet_ntop
@@ -56,15 +56,18 @@ void Connection::sendWorker() {
 		}
 }
 void Connection::recvWorker() {
-	// buffer for received messages - store address into recvOverlapped
+		// buffer for received messages - store address into recvOverlapped
 		char buf[recvBuf.len];
 		recvBuf.buf = buf;
+		// clipped messages from last round will be stored here
+		std::string clipped = "";
 		while (!quit) {
 			// stores number of bytes received
 			DWORD bytesRecv = 0;
 			// run wsarecv to wait for client to send message - then run recv loop in another thread until client disconnects (bytes zero) or null terminator reached
 			DWORD flags = 0;// flags for wsarecv operation
 			//std::cout << "Initiating recv\n";
+			unsigned long excess; // this will store how many excess bytes there are (will be used later)
 			int result = WSARecv(connection, &recvBuf, 1, NULL, &flags, &recvOverlapped, 0); // recvRoutine is not declared yet
 			// wait for event to be triggered (by external threads/events)
 			if (result != 0) {
@@ -79,9 +82,18 @@ void Connection::recvWorker() {
 					quit = true;
 					break;
 				}
-			}		
-			// get number of bytes received
-			WSAGetOverlappedResult(connection, &recvOverlapped, &bytesRecv, FALSE, 0);
+			}
+			// check if any more bytes are remaining in buffer - will be used later if last message seems to be clipped
+			result = ioctlsocket(connection, FIONREAD, &excess);
+			// debug purpose for ioctlsocket
+			std::cout << "Result of ioctlsocket to determine excess bytes: " << std::to_string(result) << "\n";
+			// get number of bytes received, but no need if already overflowing
+			if (excess > 0) { // if overflowing, recv bytes is the length of buffer
+				bytesRecv = recvBuf.len;
+			} else {
+				// if not overflowing, ask how many bytes recv
+				WSAGetOverlappedResult(connection, &recvOverlapped, &bytesRecv, FALSE, 0);
+			}
 			// debug purposes - display bytes received
 			//std::cout << "Bytes received from recvWorker: " << std::to_string(bytesRecv) << "\n";
 			// 0 bytes received means connection ended
@@ -93,6 +105,11 @@ void Connection::recvWorker() {
 			// loop through the chars in buf until cbTransferred reached
 			// until then submit each null terminated sequence as a string into recvQueue
 			std::string strBuffer = ""; // buffer for current string being read until submission
+			// get any bytes from last time if there are any excess
+			if (clipped.size() > 0) {
+				strBuffer = clipped;
+				clipped = ""; // clear the clipped since no need now
+			}
 			for (int i = 0; i < bytesRecv; i++) {
 				char current = buf[i];
 				if (current == '\0') { // submit string as null has been reached
@@ -110,15 +127,19 @@ void Connection::recvWorker() {
 				}
 				strBuffer += current;
 			}
-			if (strBuffer != "") { // send the last msg if there is one remaining
-				std::lock_guard<std::mutex> recvLock(recvMutex); // multi threaded queue so must lock before using recvQueue
-				recvQueue.push(strBuffer);
-				strBuffer = ""; // clear buffer for next string
-				//std::cout << "Pushed a message from the end!" << "\n";
-				if (recvEvent) { // call function meant to be run on message recv if function is present
-					recvEvent();
+			if (strBuffer != "") { // special case if any characters remaining - must decide whether if incomplete message or should push anyway
+				if (excess > 0) { // if excess bytes, it was clipped
+					clipped = strBuffer; // store for next round
+				} else { // push to queue since no excess means its a complete message
+					std::lock_guard<std::mutex> recvLock(recvMutex); // multi threaded queue so must lock before using recvQueue
+					recvQueue.push(strBuffer);
+					strBuffer = ""; // clear buffer for next string
+					//std::cout << "Pushed a message from the end!" << "\n";
+					if (recvEvent) { // call function meant to be run on message recv if function is present
+						recvEvent();
+					}
+					recv_cv.notify_all();
 				}
-				recv_cv.notify_all();
 			}
 		}
 		// notify recv_cv in case waitForMessage is happening
