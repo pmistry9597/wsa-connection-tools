@@ -80,6 +80,10 @@ void Connection::recvWorker() {
 				} else {
 					// quit since this means connection failure
 					quit = true;
+					// call the close event if it exists
+					if (closeEvent) {
+						closeEvent();
+					}
 					break;
 				}
 			}
@@ -99,6 +103,10 @@ void Connection::recvWorker() {
 			// 0 bytes received means connection ended
 			if (bytesRecv == 0) {
 				quit = true;
+				// call the close event if it exists
+				if (closeEvent) {
+					closeEvent();
+				}
 				break;
 			}
 			//std::cout << "Bytes received: " + std::to_string(bytesRecv) << "\n";
@@ -207,6 +215,9 @@ void Connection::close() {
 void Connection::attach_recvEvent(const std::function<void()>& recvEvent) {
 	this->recvEvent = recvEvent;
 }
+void Connection::attach_closeEvent(const std::function<void()>& closeEvent) {
+	this->closeEvent = closeEvent;
+}
 bool Connection::msg_present() {
 	return !recvQueue.empty();
 }
@@ -235,6 +246,9 @@ bool Connection::start_winsock() {
 		return false; // return false to indicate failure to start
 	} 
 	return true; // true to mean successful start since successful if this function reached this point
+}
+int Connection::msg_count() { // return number of msgs in queue
+	return recvQueue.size();
 }
 bool Connection::connect(std::string ip_address, int port, int bufsize) {
 	if (!null) {

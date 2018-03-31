@@ -31,6 +31,8 @@ class Connection {
 	WSABUF recvBuf;
 	// function that will run whenever a message is received
 	std::function<void()> recvEvent;
+	// function that will run on connection close
+	std::function<void()> closeEvent;
 	// ip and port stored here
 	std::string str_ip_address; int int_port;
 	// function that will be run in seperate thread to send messages in the sendQueue
@@ -46,13 +48,15 @@ public:
 	void push_msg(std::string msg); //push message to be sent
 	std::string pop_msg(); // return most recent msg - empty string if no message
 	void close(); // end connections
-	void attach_recvEvent(const std::function<void()>& recvEvent); // set event to be run 
+	void attach_recvEvent(const std::function<void()>& recvEvent); // set event to be run on msg receive
+	void attach_closeEvent(const std::function<void()>& closeEvent); // set event to be run on connection close
 	bool msg_present(); // returns if messages available to be read from the connections
 	bool waitForMessage(); // true if connection is still useful for operations
 	bool is_alive(); // if this object is still useful for operations
 	std::string ip_address();
 	int port();
 	bool connect(std::string ip_address, int port, int bufsize); // blocking connect request - will not return until a result is gotten, either failure or successful connection
+	int msg_count(); // return number of msgs currently in queue
 	static bool start_winsock(); // starts fundamental winsock resources - must run before any networking can happen
 };
 
