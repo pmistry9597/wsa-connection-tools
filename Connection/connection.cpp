@@ -184,6 +184,9 @@ Connection::Connection() {
 }
 Connection::~Connection() {
 	close(); // make all threads end
+	// wait for threads to finish
+	std::lock_guard<std::mutex> recv_lock(recv_mutex);
+	std::lock_guard<std::mutex> send_lock(send_mutex);
 	WSACloseEvent(recvOverlapped.hEvent); // close events when done
 	WSACloseEvent(sendOverlapped.hEvent);
 }

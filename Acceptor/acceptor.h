@@ -22,6 +22,7 @@ class Acceptor {
 	std::atomic<bool> quit; // true if the thread associated with this should quit
 	std::atomic<bool> resumed; // true if listening
 	std::mutex resumed_mutex; // associated with resuemd atomic for condition_variable
+	std::mutex thread_mutex; // this will remain locked as long as the worker thread is active
 	std::condition_variable resumed_cv; // notification for resumed bool changes
 	// port for connection listening and max possible pending connections
 	int port; int max_listen;

@@ -26,6 +26,8 @@ class Connection {
 	WSAOVERLAPPED recvOverlapped;
 	WSAOVERLAPPED sendOverlapped; // wsaoverlapped for send
 	std::atomic<bool> quit; // true if the worker thread should quit
+	std::mutex recv_mutex; // remains locked by recv thread, used by destructor to wait for thread to close
+	std::mutex send_mutex; // remains locked by send thread, used by destructor to wait for thread to close
 
 	// wsabuf for receving msgs
 	WSABUF recvBuf;

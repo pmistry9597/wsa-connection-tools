@@ -15,6 +15,7 @@ void Acceptor::worker() { // will be run by a sepearate thread for accepting
 		// run the event that was specified
 		// end of while loop
 		std::unique_lock<std::mutex> listen_lock(listen_mutex); // protect listen_status until its updated
+		std::lock_guard<std::mutex> thread_lock(thread_mutex); // lock until this thread is done
 		while (!quit) {
 			std::unique_lock<std::mutex> resumed_lock(resumed_mutex);
 			while (!resumed && !quit) { // lock into while loop until this resumes
@@ -31,6 +32,7 @@ void Acceptor::worker() { // will be run by a sepearate thread for accepting
 			// attempt to listen - if failure then quit and notify all
 			if ((listen_status = listen(lsock, max_listen)) != 0) {
 				quit = true;
+				resumed = false;
 				// notify all that are waiting on this to complete
 				accepted_cv.notify_all();
 			}
@@ -54,6 +56,9 @@ void Acceptor::worker() { // will be run by a sepearate thread for accepting
 			}
 			// wait for the accept operation to complete
 			WSAWaitForMultipleEvents(1, &overlapped.hEvent, TRUE, WSA_INFINITE, TRUE);
+			if (quit) {
+				break;
+			}
 			setsockopt(connection, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, (char*)&lsock, sizeof(lsock)); // allow normal winsock funtions to work
 			// load the socket onto the queue
 			{
@@ -77,6 +82,10 @@ void Acceptor::worker() { // will be run by a sepearate thread for accepting
 		// relock listen_status for next loop when listening is restarted
 		listen_lock.lock();
 	}
+	// notify all that are waiting for this thread to complete
+	accepted_cv.notify_all();
+	// end by closing the connection
+	closesocket(lsock);
 }
 Acceptor::Acceptor() {
 	quit = false;
@@ -87,9 +96,12 @@ Acceptor::Acceptor() {
 	acceptThread.detach();
 }
 Acceptor::~Acceptor() {
+	quit = true; // make the worker quit next time it reads quit
+	resumed_cv.notify_one();
 	stop_listen();
 	WSACloseEvent(overlapped.hEvent);// event is no longer needed and should free up resources
 	// wait for thread to quit
+	std::lock_guard<std::mutex> thread_lock(thread_mutex);
 }
 void Acceptor::attach_event(const std::function<void()>& accept_event) { // change event to be run on connection accept
 	this->accept_event = accept_event;
@@ -100,7 +112,7 @@ int Acceptor::start_listen(int port, int max_listen) { // start listening operat
 }
 int Acceptor::start_listen() { // start listening but with stored port and max listening and resume operations (true if successful listen)
 	// make sure port and max_listen are proper numbers
-	if (!(listen > 0 && max_listen > 0)) {
+	if (!(port > 0 && max_listen > 0)) {
 		return -1;
 	}
 	resumed = true;
